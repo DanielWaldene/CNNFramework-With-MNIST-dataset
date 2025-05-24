@@ -1,20 +1,40 @@
-BIN_DIR:=bin
-BUILD_DIR := build
-SRC_DIR :=src
-TARGET := $(BIN_DIR)/main
-OBJS := $(BUILD_DIR)/main.o  $(BUILD_DIR)/utility.o $(BUILD_DIR)/cnn.o $(BUILD_DIR)/network.o
-$(TARGET):$(OBJS)
-	g++ -Wall -o $@ $(OBJS)
-$(BUILD_DIR)/main.o: $(SRC_DIR)/main.cpp
-	g++ -Wall -c $< -o $@
-$(BUILD_DIR)/utility.o: $(SRC_DIR)/utility.cpp $(SRC_DIR)/utility.hpp
-	g++ -Wall  -c $< -o $@
-$(BUILD_DIR)/cnn.o: $(SRC_DIR)/cnn.cpp $(SRC_DIR)/cnn.hpp
-	g++ -Wall  -c $< -o $@
-$(BUILD_DIR)/network.o: $(SRC_DIR)/network.cpp $(SRC_DIR)/network.hpp
-	g++ -Wall  -c $< -o $@
+TARGET_EXEC := final_program
+BUILD_DIR := ./build
+SRC_DIRS := ./src
+
+# Find all the C and C++ files we want to compile
+# Note the single quotes around the * expressions. The shell will incorrectly expand these otherwise, but we want to send the * directly to the find command.
+SRCS := $(shell find $(SRC_DIRS) -name '*.cpp' -or -name '*.c' -or -name '*.s')
+
+# Prepends BUILD_DIR and appends .o to every src file
+# As an example, ./your_dir/hello.cpp turns into ./build/./your_dir/hello.cpp.o
+OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
+
+# String substitution (suffix version without %).
+# As an example, ./build/hello.cpp.o turns into ./build/hello.cpp.d
+DEPS := $(OBJS:.o=.d)
+
+# Every folder in ./src will need to be passed to GCC so that it can find header files
+INC_DIRS := $(shell find $(SRC_DIRS) -type d)
+# Add a prefix to INC_DIRS. So moduleA would become -ImoduleA. GCC understands this -I flag
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+# The -MMD and -MP flags together generate Makefiles for us!
+# These files will have .d instead of .o as the output.
+CPPFLAGS := $(INC_FLAGS) -MMD -MP
+# The final build step.
+$(BUILD_DIR)/$(TARGET_EXEC): $(OBJS) #default compile and link because I need to check changes more than running
+	$(CXX) $(OBJS) -o $@ $(LDFLAGS)
+# Build step for C++ source
+$(BUILD_DIR)/%.cpp.o: %.cpp
+	mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+run: $(BUILD_DIR)/$(TARGET_EXEC) 		#make target to run
+	$(BUILD_DIR)/$(TARGET_EXEC)
+.PHONY: clean
 clean:
-	rm -rf $(BIN_DIR)/*
-	rm -rf $(BUILD_DIR)/*.o
-run: 
-	./$(TARGET)
+	rm -r $(BUILD_DIR)
+# Include the .d makefiles. The - at the front suppresses the errors of missing
+# Makefiles. Initially, all the .d files will be missing, and we don't want those
+# errors to show up.
+-include $(DEPS)
